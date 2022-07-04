@@ -1,0 +1,262 @@
+
+load_file("nrngui.hoc")
+
+create dend
+access dend
+
+//adaptive integrator
+objref cvode
+cvode = new CVode()
+cvode.active(1)
+
+
+//**************************************************************//
+// The Parameters
+//**************************************************************//
+
+tstop = 30000
+steps_per_ms = 40
+dt = 0.025
+
+// --------------------------------------------------------------
+// Resistances and Capacitances
+// --------------------------------------------------------------
+
+ra     = 150
+rmdend = 14000
+cmdend    = 1.5
+
+v_init    = -65
+celsius   = 34
+
+// --------------------------------------------------------------
+// Equilibrium potentials
+// --------------------------------------------------------------
+
+Eh=-30
+Ek = -90
+Ena = 55
+
+//--------------------------------------------------------------
+// Active conductance densities and other related parameters
+//--------------------------------------------------------------
+
+gna=0.03
+nash=10
+gkdr=0.005
+gka=0.044
+gh=0.0042
+
+//--------------------------------------------------------------
+// NetStim and Synapse parameters and objects
+//--------------------------------------------------------------
+
+tsyn=20
+intrvl=10
+nmbr=900
+noisevar=0.0
+
+
+
+
+
+//--------------------------------------------------------------
+// Synapse parameters
+//--------------------------------------------------------------
+
+P=1e-6	// AMPA Permeability in cm/s.
+NAR=1.5
+w_init=0.25
+
+//--------------------------------------------------------------
+// The code.
+//--------------------------------------------------------------
+
+dend {
+	L=50	// Take a 50um dendrite
+	diam=1	// It is 1um thick
+}
+
+// -------------------------Insert passive elements--------------------------
+
+insert pas
+e_pas = v_init
+Ra=ra
+cm=cmdend
+g_pas=1/rmdend
+
+// Insert active elements.
+
+dend {
+    insert nas
+    gbar_nas=gna
+
+    insert kdr
+    gkdrbar_kdr=gkdr
+	
+    insert kad
+    gkabar_kad=0
+	
+    insert hd
+    ghdbar_hd = gh
+
+    insert cad
+
+    gkabar_kad = gka
+	
+    ek = Ek
+    ena = Ena
+    ehd_hd=Eh
+
+    finitialize(v_init)
+    fcurrent()
+
+}
+
+
+//-----------------------Stimulus generator------------------------//
+objref ampa, nmda, ncl
+objref s
+s = new NetStim(0.5)
+s.interval=intrvl   // ms (mean) time between spikes
+s.number=nmbr       // (average) number of spikes
+s.start=tsyn        // ms (mean) start time of first spike
+s.noise=0           // range 0 to 1. Fractional randomness
+
+
+//-------------------------Synaptic receptors------------------------------
+ampa=new Wghkampa(0.5)
+ncl=new List()
+dend ncl.append(new NetCon(s, ampa, 0, 0, 0)) //new NetCon(stimulus, synapse, threshold, delay, weight)
+ampa.taur		= 2	
+ampa.taud		= 10	
+ampa.Pmax		= P	
+ampa.winit		= w_init
+
+nmda=new ghknmda(0.5)
+dend ncl.append(new NetCon(s, nmda, 0, 0, 0))
+nmda.taur		= 5	
+nmda.taud		= 50	
+nmda.Pmax		= P*NAR
+
+/********************************************************************/
+
+proc update_init(){
+	finitialize(v_init)
+	fcurrent()
+	for (x) {
+		e_pas(x)=v(x)
+		e_pas(x)=e_pas(x)+(ina(x)+ik(x)+i_hd(x))/g_pas(x)
+	}
+
+}
+/********************************************************************/
+
+objref weight_file, freq_file, ca_file
+objref weight, cavec, tvec
+strdef wfile_name, frfile_name
+
+proc BCM(){
+			
+	weight= new Vector()
+	cavec= new Vector()
+	tvec= new Vector()
+
+   	weight_file= new File()
+	freq_file= new File()
+	ca_file= new File() 
+    
+    
+	ampa.winit=0.25
+	w_init=0.25
+
+	sprint(wfile_name,"gIH_%f.txt",gh)
+	weight_file.wopen(wfile_name)
+
+
+
+
+
+for (i=1; i<=25; i+=1) {	// Induction frequency varied between 1-25Hz
+			s.interval=1000/i
+			weight.record(&ampa.w)
+			cavec.record(&dend.cai(0.5))
+			tvec.record(&t)
+
+			
+
+			update_init()
+			tstop=s.interval*900 // 900 pulses of that ISI
+		
+           		while (t < tstop){
+				fadvance()
+			}	
+		
+         		sum=0
+			right=weight.size()-1000
+			if (right<0) right=0
+			count=0
+			for (j=weight.size()-1; j>right; j-=1){ 
+				sum=sum+weight.x[j]
+				count=count+1
+			}	
+			sum=sum/count
+			weight_file.printf("%f\t%f\n",i,100*(sum/w_init-1))
+			print i, "\t", sum, "\t", 100*(sum/w_init-1)
+		
+			sprint(frfile_name,"frequency_%d.txt",i)
+			freq_file.wopen(frfile_name)
+			for p=0,tvec.size()-1 {
+				//while (tvec.x[p]<=30000){
+			
+			freq_file.printf("%f\t%f\n",tvec.x[p],weight.x[p])
+					//}
+				}
+					freq_file.close()
+  	
+ /*           sprint(sweight,"Data/Weights_%f.txt", i)
+            weight_file.wopen(sweight)
+            weight.printf(weight_file)
+  
+     	    sprint(sca,"Data/Ca_%f.txt", i)
+            ca_file.wopen(sca)
+            cavec.printf(ca_file)
+
+	    sprint(stime,"Data/Time_%f.txt", i)
+            time_file.wopen(stime)
+            tvec.printf(time_file)
+   
+*/
+}
+		
+	
+    weight_file.close()
+    ca_file.close()
+    //time_file.close()
+    
+}
+
+objref g[20]
+ngraph=0
+
+proc addgraph() { local ii  // define subroutine to add a new graph
+                // addgraph("variable", minvalue, maxvalue)
+    ngraph = ngraph+1
+    ii = ngraph-1
+    g[ii] = new Graph()
+    g[ii].size(0,tstop,$2,$3)
+    g[ii].xaxis()
+    g[ii].yaxis()
+    g[ii].addvar($s1,1,0)
+    g[ii].save_name("graphList[0].")
+    graphList[0].append(g[ii])
+}
+
+addgraph("dend.v(0.5)",-80,50)
+addgraph("dend.cai(0.5)",0.0001,0.0013)
+addgraph("ampa.w",0,1)
+
+/********************************************************************/
+ 
+//BCM()
+nrncontrolmenu()

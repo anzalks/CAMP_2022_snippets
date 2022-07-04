@@ -1,0 +1,132 @@
+load_file("nrngui.hoc")
+
+//create a single section
+
+create dend
+access dend
+
+//**************************************************************//
+// The Parameters
+//**************************************************************//
+
+tstop = 30000
+steps_per_ms = 40
+dt = 0.025
+
+// --------------------------------------------------------------
+// Resistances and Capacitances
+// --------------------------------------------------------------
+
+ra     = 150			
+rmdend = 14000
+cmdend    = 1.5
+
+v_init    = -65
+celsius   = 34
+
+// --------------------------------------------------------------
+// Equilibrium potentials
+// --------------------------------------------------------------
+
+Eh =-30
+Ek = -90
+Ena = 55
+
+//--------------------------------------------------------------
+// Active conductance densities and other related parameters
+//--------------------------------------------------------------
+
+gna=0.03
+nash=10
+gkdr=0.005
+gka=0.044
+gh=0.0042
+
+//--------------------------------------------------------------
+// NetStim and Synapse parameters and objects
+//--------------------------------------------------------------
+
+tsyn=20
+intrvl=10
+nmbr=900
+noisevar=0.0
+objref ampa, nmda, s
+objref ncl, weight
+
+//--------------------------------------------------------------
+// Synapse parameters
+//--------------------------------------------------------------
+
+P=1e-6	// AMPA Permeability in cm/s.
+NAR=1.5
+w=0.25
+
+//--------------------------------------------------------------
+// The code.
+//--------------------------------------------------------------
+
+dend {
+	L=50
+	diam=1
+}
+
+// Insert passive elements.
+
+insert pas
+e_pas = v_init
+g_pas=1/rmdend
+Ra=ra
+cm=cmdend
+
+
+// Insert active elements.
+
+dend {
+    
+    //ion channels
+    
+    insert nas
+    gbar_nas=gna
+
+    insert kdr
+    gkdrbar_kdr=gkdr
+	
+    insert kad
+    gkabar_kad=0
+	
+    insert hd
+    ghdbar_hd = gh
+
+    gkabar_kad = gka
+	
+	ek = Ek
+	ena = Ena
+	ehd_hd=Eh
+
+    
+    //calcium handling mechanism
+    insert cad
+    
+}
+
+//Synaptic receptors
+
+objref ampa, nmda, ncl
+
+ncl=new List()
+
+ampa=new Wghkampa(0.5)
+dend ncl.append(new NetCon(s, ampa, 0, 0, 0))   //s is the stimulus
+ampa.taur		= 2	
+ampa.taud		= 10	
+ampa.Pmax		= P	
+ampa.winit		= w
+
+nmda=new ghknmda(0.5)
+dend ncl.append(new NetCon(s, nmda, 0, 0, 0))
+nmda.taur		= 5	
+nmda.taud		= 50	
+nmda.Pmax		= P*NAR
+
+
+/********************************************************************/
