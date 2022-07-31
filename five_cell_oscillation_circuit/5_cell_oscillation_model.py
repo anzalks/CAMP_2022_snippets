@@ -5,7 +5,9 @@ CAMP 2022 tutorial
 
 import matplotlib.pyplot as plt
 import numpy as np 
+from scipy.integrate import solve_ivp
 import math as math
+
 def switchIC(t=1,y=1,ghc=1,gsynicpd=1,gsynicin=1,geliclp=1,geliclg=1):
     y = np.ones(16)
     t = np.arange(1,16,1)
@@ -93,4 +95,9 @@ respectively.
     print(f'dy retun value = {dy}')
     return dy
 
-switchIC(t=1,y=1,ghc=1,gsynicpd=1,gsynicin=1,geliclp=1,geliclg=1)
+t_span = 
+y0 = 
+
+#switchIC(t=1,y=1,ghc=1,gsynicpd=1,gsynicin=1,geliclp=1,geliclg=1)
+#solve_ivp(switchIC, t_span, y0, method='RK45', t_eval=None, dense_output=False,
+          events=None, vectorized=False, args=None, **options)
